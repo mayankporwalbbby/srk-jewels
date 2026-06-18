@@ -18,34 +18,54 @@ const nav = [
 ]
 
 function PriceBar() {
-  const { gold10g, silverKg, loading, error, updatedAt } = useMetalPrices()
-  const fmt = n => n ? '₹' + Number(n).toLocaleString('en-IN') : '...'
+  const { gold10g, silverKg, loading, error, updatedAt, refresh, showWarning, dismissWarning } = useMetalPrices()
+  const fmt = n => n ? '₹' + Number(n).toLocaleString('en-IN') : '—'
   const time = updatedAt ? updatedAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : ''
 
   return (
-    <div className="bg-amber-800 text-amber-100 px-4 py-1.5 flex items-center justify-between text-xs flex-wrap gap-2">
-      <div className="flex items-center gap-4">
-        <span className="font-semibold text-amber-200 flex items-center gap-1">
-          <TrendingUp size={11} /> Live Rates
-        </span>
-        <span>
-          <span className="text-yellow-300 font-bold">Gold</span>
-          <span className="ml-1 text-amber-100">(10g): </span>
-          <span className="font-semibold">{loading ? '...' : error ? 'N/A' : fmt(gold10g)}</span>
-        </span>
-        <span>
-          <span className="text-gray-300 font-bold">Silver</span>
-          <span className="ml-1 text-amber-100">(kg): </span>
-          <span className="font-semibold">{loading ? '...' : error ? 'N/A' : fmt(silverKg)}</span>
-        </span>
+    <>
+      <div className="bg-amber-800 text-amber-100 px-4 py-1.5 flex items-center justify-between text-xs flex-wrap gap-2">
+        <div className="flex items-center gap-4">
+          <span className="font-semibold text-amber-200 flex items-center gap-1">
+            <TrendingUp size={11} /> Live Rates
+          </span>
+          <span>
+            <span className="text-yellow-300 font-bold">Gold</span>
+            <span className="ml-1">(10g): </span>
+            <span className="font-semibold">{loading ? '...' : error ? 'N/A' : fmt(gold10g)}</span>
+          </span>
+          <span>
+            <span className="text-gray-300 font-bold">Silver</span>
+            <span className="ml-1">(kg): </span>
+            <span className="font-semibold">{loading ? '...' : error ? 'N/A' : fmt(silverKg)}</span>
+          </span>
+          {time && <span className="text-amber-400 hidden sm:block">as of {time}</span>}
+        </div>
+        <button onClick={refresh} disabled={loading}
+          className="flex items-center gap-1 text-amber-300 hover:text-white disabled:opacity-40 transition-colors">
+          <RefreshCw size={11} className={loading ? 'animate-spin' : ''} />
+          <span>Refresh</span>
+        </button>
       </div>
-      {time && (
-        <span className="text-amber-400 flex items-center gap-1">
-          <RefreshCw size={10} /> Updated {time}
-        </span>
+
+      {showWarning && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4">
+          <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full text-center">
+            <div className="text-3xl mb-3">⚠️</div>
+            <h3 className="text-lg font-bold text-gray-800 mb-2">Refresh Limit Reached</h3>
+            <p className="text-gray-600 text-sm mb-4">
+              You have already refreshed prices <strong>twice today</strong>. Further refreshes will consume your
+              free API limit of <strong>100 requests/month</strong> on GoldAPI.
+            </p>
+            <p className="text-gray-400 text-xs mb-5">Prices will auto-refresh tomorrow when you log in.</p>
+            <button onClick={dismissWarning}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-semibold px-6 py-2 rounded-lg text-sm">
+              Got it
+            </button>
+          </div>
+        </div>
       )}
-      {error && <span className="text-red-300">{error}</span>}
-    </div>
+    </>
   )
 }
 
