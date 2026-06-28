@@ -18,6 +18,9 @@ alter table loan_entries add column if not exists monthly_interest numeric;
 alter table loan_entries add column if not exists gold_rate_at_lending numeric;
 alter table sales add column if not exists gold_rate_at_sale numeric;
 
+-- Sales: store quality % explicitly so it survives edit/reload
+alter table sales add column if not exists product_quality_pct numeric;
+
 -- Sales: 5 image slots (replacing image_front/image_back)
 alter table sales add column if not exists image_url text;
 alter table sales add column if not exists image_url_2 text;

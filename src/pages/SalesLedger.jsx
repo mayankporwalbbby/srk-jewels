@@ -301,18 +301,19 @@ export default function SalesLedger() {
 
   useEffect(() => { load() }, [])
 
-  const uploadImg = async (file, folder) => {
+  const uploadImg = async (file, slot) => {
     if (!file) return null
-    const path = `${folder}/${Date.now()}_${file.name}`
+    const ext = file.name.split('.').pop().toLowerCase()
+    const path = `sales/${slot}_${Date.now()}.${ext}`
     const { error } = await supabase.storage.from('jewellery-images').upload(path, file, { upsert: true })
-    if (error) return null
+    if (error) { console.error('Upload error:', error.message); return null }
     return supabase.storage.from('jewellery-images').getPublicUrl(path).data.publicUrl
   }
 
   const handleSave = async (e) => {
     e.preventDefault()
     setSaving(true)
-    const urls = await Promise.all(imgFiles.map((f, i) => f ? uploadImg(f, `sales/${i+1}`) : Promise.resolve(null)))
+    const urls = await Promise.all(imgFiles.map((f, i) => f ? uploadImg(f, i + 1) : Promise.resolve(null)))
     const payload = {
       ...form,
       image_url: urls[0] || form.image_url || form.image_front || null,
@@ -337,7 +338,6 @@ export default function SalesLedger() {
       fine_metal: parseFloat(form.fine_metal) || null,
       gold_rate_at_sale: parseFloat(form.gold_rate_at_sale) || null,
     }
-    delete payload.product_quality_pct
     delete payload.image_front
     delete payload.image_back
 
