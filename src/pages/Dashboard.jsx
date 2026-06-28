@@ -3,6 +3,8 @@ import { supabase } from '../supabase'
 import { Package, ShoppingBag, Landmark, AlertCircle, TrendingUp } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
+const PERIODS = ['Today', 'Week', 'Month', 'Year', 'All']
+
 function StatCard({ icon: Icon, label, value, sub, color, to }) {
   const card = (
     <div className={`bg-white rounded-xl p-5 shadow-sm border border-${color}-100 hover:shadow-md transition-shadow`}>
@@ -17,89 +19,153 @@ function StatCard({ icon: Icon, label, value, sub, color, to }) {
   return to ? <Link to={to}>{card}</Link> : card
 }
 
+function periodStart(period) {
+  const now = new Date()
+  if (period === 'Today') { const d = new Date(now); d.setHours(0,0,0,0); return d.toISOString() }
+  if (period === 'Week') { const d = new Date(now); d.setDate(d.getDate() - 6); d.setHours(0,0,0,0); return d.toISOString() }
+  if (period === 'Month') { const d = new Date(now); d.setDate(1); d.setHours(0,0,0,0); return d.toISOString() }
+  if (period === 'Year') { const d = new Date(now); d.setMonth(0,1); d.setHours(0,0,0,0); return d.toISOString() }
+  return null
+}
+
 export default function Dashboard() {
-  const [stats, setStats] = useState({ inventory: 0, totalSales: 0, pendingAmount: 0, activeLoans: 0, todaySales: 0 })
+  const [period, setPeriod] = useState('Month')
+  const [stats, setStats] = useState({ inventory: 0, sales: 0, salePending: 0, loanPending: 0, activeLoans: 0 })
   const [recentSales, setRecentSales] = useState([])
+  const [recentLoans, setRecentLoans] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
-      const [inv, sales, loans] = await Promise.all([
+      const start = periodStart(period)
+
+      const [inv, sales, loans, loanEntries] = await Promise.all([
         supabase.from('products').select('id', { count: 'exact', head: true }),
-        supabase.from('sales').select('final_price_with_gst, pending_amount, date'),
-        supabase.from('loan_entries').select('id, loan_cleared_date', { count: 'exact' }),
+        start
+          ? supabase.from('sales').select('final_price_with_gst, pending_amount, date').gte('date', start.split('T')[0])
+          : supabase.from('sales').select('final_price_with_gst, pending_amount, date'),
+        supabase.from('loan_entries').select('id, loan_amount, monthly_interest, loan_date, loan_cleared_date, amount_submitted, customer_name'),
+        supabase.from('loan_entries').select('id, customer_name, loan_amount, loan_cleared_date, date').order('date', { ascending: false }).limit(5),
       ])
 
-      const today = new Date().toISOString().split('T')[0]
       const salesData = sales.data || []
-      const totalSales = salesData.reduce((s, r) => s + (r.final_price_with_gst || 0), 0)
-      const pendingAmount = salesData.reduce((s, r) => s + (r.pending_amount || 0), 0)
-      const todaySales = salesData.filter(r => r.date?.startsWith(today)).reduce((s, r) => s + (r.final_price_with_gst || 0), 0)
-      const activeLoans = (loans.data || []).filter(r => !r.loan_cleared_date).length
+      const loansData = loans.data || []
 
-      setStats({ inventory: inv.count || 0, totalSales, pendingAmount, activeLoans, todaySales })
+      const totalSales = salesData.reduce((s, r) => s + (r.final_price_with_gst || 0), 0)
+      const salePending = salesData.reduce((s, r) => s + (r.pending_amount || 0), 0)
+
+      // Active loans pending (outstanding loan amounts)
+      const activeLoansData = loansData.filter(r => !r.loan_cleared_date)
+      const loanPending = activeLoansData.reduce((s, r) => s + (r.loan_amount || 0), 0)
+
+      setStats({
+        inventory: inv.count || 0,
+        sales: totalSales,
+        salePending,
+        loanPending,
+        activeLoans: activeLoansData.length,
+      })
 
       const { data: recent } = await supabase.from('sales').select('*').order('date', { ascending: false }).limit(5)
       setRecentSales(recent || [])
+      setRecentLoans(loanEntries.data || [])
       setLoading(false)
     }
     load()
-  }, [])
+  }, [period])
 
   const fmt = (n) => '₹' + Number(n || 0).toLocaleString('en-IN')
 
-  if (loading) return <div className="text-gray-500 text-sm">Loading dashboard...</div>
-
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-800 mb-1">Dashboard</h1>
-      <p className="text-gray-500 text-sm mb-6">Welcome to SRK Jewellers management panel</p>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <StatCard icon={Package} label="Inventory Items" value={stats.inventory} color="amber" to="/inventory" />
-        <StatCard icon={TrendingUp} label="Today's Sales" value={fmt(stats.todaySales)} color="green" to="/sales" />
-        <StatCard icon={AlertCircle} label="Pending Collection" value={fmt(stats.pendingAmount)} color="red" to="/sales" />
-        <StatCard icon={Landmark} label="Active Loans" value={stats.activeLoans} color="blue" to="/loans" />
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold text-gray-700 flex items-center gap-2">
-            <ShoppingBag size={16} className="text-amber-600" /> Recent Sales
-          </h2>
-          <Link to="/sales" className="text-xs text-amber-600 hover:underline">View all</Link>
+      <div className="flex items-start justify-between mb-4 flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
+          <p className="text-gray-500 text-sm">SRK Jewellers management panel</p>
         </div>
-        {recentSales.length === 0 ? (
-          <p className="text-gray-400 text-sm">No sales recorded yet.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-gray-400 border-b">
-                  <th className="pb-2 font-medium">Invoice</th>
-                  <th className="pb-2 font-medium">Customer</th>
-                  <th className="pb-2 font-medium">Product</th>
-                  <th className="pb-2 font-medium text-right">Amount</th>
-                  <th className="pb-2 font-medium text-right">Pending</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentSales.map(s => (
-                  <tr key={s.id} className="border-b last:border-0 hover:bg-amber-50">
-                    <td className="py-2 text-amber-700 font-mono text-xs">{s.invoice_id}</td>
-                    <td className="py-2">{s.customer_name}</td>
-                    <td className="py-2 text-gray-500">{s.product_bought}</td>
-                    <td className="py-2 text-right font-medium">{fmt(s.final_price_with_gst)}</td>
-                    <td className={`py-2 text-right ${s.pending_amount > 0 ? 'text-red-500' : 'text-green-600'}`}>
-                      {s.pending_amount > 0 ? fmt(s.pending_amount) : 'Paid'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+          {PERIODS.map(p => (
+            <button key={p} onClick={() => setPeriod(p)}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${period === p ? 'bg-white shadow text-amber-700' : 'text-gray-500 hover:text-gray-700'}`}>
+              {p}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {loading ? <p className="text-gray-400 text-sm">Loading...</p> : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+            <StatCard icon={Package} label="Inventory Items" value={stats.inventory} color="amber" to="/inventory" />
+            <StatCard icon={TrendingUp} label={`${period} Sales`} value={fmt(stats.sales)} color="green" to="/sales" />
+            <StatCard icon={AlertCircle} label="Sale Pending" value={fmt(stats.salePending)} color="red" to="/sales" />
+            <StatCard icon={Landmark} label="Loan Outstanding" value={fmt(stats.loanPending)} color="purple" to="/loans" />
+            <StatCard icon={Landmark} label="Active Loans" value={stats.activeLoans} color="blue" to="/loans" />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Recent Sales */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold text-gray-700 flex items-center gap-2">
+                  <ShoppingBag size={16} className="text-amber-600" /> Recent Sales
+                </h2>
+                <Link to="/sales" className="text-xs text-amber-600 hover:underline">View all</Link>
+              </div>
+              {recentSales.length === 0 ? (
+                <p className="text-gray-400 text-sm">No sales recorded yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {recentSales.map(s => (
+                    <div key={s.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                      <div>
+                        <div className="text-sm font-medium text-gray-800">{s.customer_name}</div>
+                        <div className="text-xs text-gray-400">{s.invoice_id} · {s.date}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-semibold text-gray-700">{fmt(s.final_price_with_gst)}</div>
+                        {s.pending_amount > 0
+                          ? <div className="text-xs text-red-500">{fmt(s.pending_amount)} due</div>
+                          : <div className="text-xs text-green-500">Paid</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Recent Loan Activity */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold text-gray-700 flex items-center gap-2">
+                  <Landmark size={16} className="text-blue-600" /> Recent Loans
+                </h2>
+                <Link to="/loans" className="text-xs text-amber-600 hover:underline">View all</Link>
+              </div>
+              {recentLoans.length === 0 ? (
+                <p className="text-gray-400 text-sm">No loans recorded yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {recentLoans.map(l => (
+                    <div key={l.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                      <div>
+                        <div className="text-sm font-medium text-gray-800">{l.customer_name}</div>
+                        <div className="text-xs text-gray-400">{l.date}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-semibold text-gray-700">{fmt(l.loan_amount)}</div>
+                        {l.loan_cleared_date
+                          ? <div className="text-xs text-green-500">Cleared</div>
+                          : <div className="text-xs text-orange-500">Active</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

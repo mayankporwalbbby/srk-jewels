@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabase'
 import FormField from '../components/FormField'
-import { Plus, X, User } from 'lucide-react'
+import { Plus, X, User, Phone, MessageCircle } from 'lucide-react'
 
 const EMPTY = { name: '', contact: '', alt_contact: '', email: '', address: '', aadhar: '', ref1: '', ref1_contact: '', ref2: '', ref2_contact: '' }
 
@@ -42,6 +42,8 @@ export default function Customers() {
 
   const filtered = customers.filter(c => !search || [c.name, c.contact, c.address].some(v => v?.toLowerCase().includes(search.toLowerCase())))
 
+  const waLink = (contact) => `https://wa.me/91${contact?.replace(/\D/g, '')}`
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -67,21 +69,54 @@ export default function Customers() {
                   <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
                     <User size={16} className="text-amber-600" />
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <div className="font-semibold text-gray-800">{c.name}</div>
-                    <div className="text-sm text-gray-500">{c.contact}</div>
-                    {c.alt_contact && <div className="text-xs text-gray-400">{c.alt_contact}</div>}
-                    {c.address && <div className="text-xs text-gray-500 mt-1">{c.address}</div>}
+                    {c.address && <div className="text-xs text-gray-500 mt-0.5">{c.address}</div>}
                     {c.aadhar && <div className="text-xs text-gray-400 mt-0.5">Aadhar: {c.aadhar}</div>}
+
+                    {/* Primary contact */}
+                    {c.contact && (
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className="text-sm text-gray-600">{c.contact}</span>
+                        <a href={`tel:${c.contact}`} className="p-1 rounded-full bg-blue-50 text-blue-500 hover:bg-blue-100">
+                          <Phone size={12} />
+                        </a>
+                        <a href={waLink(c.contact)} target="_blank" rel="noreferrer" className="p-1 rounded-full bg-green-50 text-green-500 hover:bg-green-100">
+                          <MessageCircle size={12} />
+                        </a>
+                      </div>
+                    )}
+                    {c.alt_contact && (
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs text-gray-400">{c.alt_contact}</span>
+                        <a href={`tel:${c.alt_contact}`} className="p-1 rounded-full bg-blue-50 text-blue-500 hover:bg-blue-100">
+                          <Phone size={11} />
+                        </a>
+                        <a href={waLink(c.alt_contact)} target="_blank" rel="noreferrer" className="p-1 rounded-full bg-green-50 text-green-500 hover:bg-green-100">
+                          <MessageCircle size={11} />
+                        </a>
+                      </div>
+                    )}
+
                     {(c.ref1 || c.ref2) && (
-                      <div className="mt-2 text-xs text-gray-400">
-                        {c.ref1 && <div>Ref: {c.ref1} {c.ref1_contact && `· ${c.ref1_contact}`}</div>}
-                        {c.ref2 && <div>Ref: {c.ref2} {c.ref2_contact && `· ${c.ref2_contact}`}</div>}
+                      <div className="mt-2 text-xs text-gray-400 space-y-0.5">
+                        {c.ref1 && (
+                          <div className="flex items-center gap-2">
+                            <span>Ref: {c.ref1} {c.ref1_contact && `· ${c.ref1_contact}`}</span>
+                            {c.ref1_contact && <a href={waLink(c.ref1_contact)} target="_blank" rel="noreferrer" className="text-green-400 hover:text-green-600"><MessageCircle size={10} /></a>}
+                          </div>
+                        )}
+                        {c.ref2 && (
+                          <div className="flex items-center gap-2">
+                            <span>Ref: {c.ref2} {c.ref2_contact && `· ${c.ref2_contact}`}</span>
+                            {c.ref2_contact && <a href={waLink(c.ref2_contact)} target="_blank" rel="noreferrer" className="text-green-400 hover:text-green-600"><MessageCircle size={10} /></a>}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
                 </div>
-                <div className="flex gap-2 ml-2">
+                <div className="flex gap-2 ml-2 flex-shrink-0">
                   <button onClick={() => { setForm(c); setShowForm(true) }} className="text-xs text-blue-500 hover:underline">Edit</button>
                   <button onClick={() => handleDelete(c.id)} className="text-xs text-red-400 hover:underline">Del</button>
                 </div>
@@ -95,7 +130,7 @@ export default function Customers() {
       {showForm && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center overflow-y-auto py-8 px-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 relative">
-            <button onClick={() => setShowForm(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={20} /></button>
+            <button onClick={() => setShowForm(false)} className="absolute top-4 right-4 text-gray-400"><X size={20} /></button>
             <h2 className="text-lg font-bold text-gray-800 mb-4">{form.id ? 'Edit' : 'Add'} Customer</h2>
             <form onSubmit={handleSave} className="grid grid-cols-2 gap-3">
               <FormField label="Full Name" name="name" value={form.name} onChange={set} />
