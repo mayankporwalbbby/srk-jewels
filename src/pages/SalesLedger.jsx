@@ -399,7 +399,7 @@ export default function SalesLedger() {
           <h1 className="text-2xl font-bold text-gray-800">Sales Ledger</h1>
           <p className="text-gray-500 text-sm">Total: ₹{Number(totalSales).toLocaleString('en-IN')} · Pending: ₹{Number(totalPending).toLocaleString('en-IN')}</p>
         </div>
-        <button onClick={() => { setForm({ ...EMPTY, gold_rate_at_sale: gold10g || '', metal_rate_on_day: gold10g || '' }); setCustSearch(''); setShowForm(true) }}
+        <button onClick={() => { setForm({ ...EMPTY, gold_rate_at_sale: gold10g || '', metal_rate_on_day: gold10g || '' }); setCustSearch(''); setImgFiles([null,null,null,null,null]); setShowForm(true) }}
           className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold px-4 py-2 rounded-lg">
           <Plus size={16} /> New Sale
         </button>
@@ -418,7 +418,7 @@ export default function SalesLedger() {
 
       {loading ? <p className="text-gray-400 text-sm">Loading...</p> : (
         filtered.length === 0 ? <p className="text-gray-400 text-sm">No sales found.</p> :
-          filtered.map(s => <SaleRow key={s.id} sale={s} onEdit={s => { setForm({ ...s, product_quality_pct: s.product_quality_pct || '' }); setCustSearch(s.customer_name || ''); setShowForm(true) }} onPrint={setPrintSale} />)
+          filtered.map(s => <SaleRow key={s.id} sale={s} onEdit={s => { setForm({ ...s, product_quality_pct: s.product_quality_pct || '' }); setCustSearch(s.customer_name || ''); setImgFiles([null,null,null,null,null]); setShowForm(true) }} onPrint={setPrintSale} />)
       )}
 
       {showForm && (
