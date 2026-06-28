@@ -306,7 +306,7 @@ export default function SalesLedger() {
     const ext = file.name.split('.').pop().toLowerCase()
     const path = `sales/${slot}_${Date.now()}.${ext}`
     const { error } = await supabase.storage.from('jewellery-images').upload(path, file, { upsert: true })
-    if (error) { console.error('Upload error:', error.message); return null }
+    if (error) { alert('Image upload failed: ' + error.message); return null }
     return supabase.storage.from('jewellery-images').getPublicUrl(path).data.publicUrl
   }
 
@@ -327,7 +327,7 @@ export default function SalesLedger() {
       metal_rate_per_gram: parseFloat(form.metal_rate_per_gram) || null,
       amount_without_gst: parseFloat(form.amount_without_gst) || null,
       final_price_after_discount: parseFloat(form.final_price_after_discount) || null,
-      gst_pct: parseFloat(form.gst_pct) || 3,
+      gst_pct: form.gst_pct !== '' && form.gst_pct != null ? parseFloat(form.gst_pct) : 3,
       gst_amount: parseFloat(form.gst_amount) || null,
       final_price_with_gst: parseFloat(form.final_price_with_gst) || null,
       amount_paid: parseFloat(form.amount_paid) || null,
