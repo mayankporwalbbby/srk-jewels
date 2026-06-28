@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../supabase'
 import FormField from '../components/FormField'
+import { useMetalPrices } from '../hooks/useMetalPrices'
 import { Plus, X, Upload, ChevronDown, ChevronUp, Phone, MessageCircle, Printer } from 'lucide-react'
 
 const EMPTY = {
@@ -13,7 +14,8 @@ const EMPTY = {
   amount_without_gst: '', gst_amount: '', final_price_with_gst: '',
   final_price_after_discount: '', hsn_code: '', bought_from: 'Self',
   amount_paid: '', pending_amount: '', product_amount: '', revenue: '',
-  return_commitment: '', payment_commitment: '', executive: 'Mayank', remark: ''
+  return_commitment: '', payment_commitment: '', executive: 'Mayank', remark: '',
+  gold_rate_at_sale: ''
 }
 
 const EXECUTIVES = ['Mayank', 'Divyanshu']
@@ -136,6 +138,7 @@ export default function SalesLedger() {
   const [printSale, setPrintSale] = useState(null)
   const [custSearch, setCustSearch] = useState('')
   const [showCustDropdown, setShowCustDropdown] = useState(false)
+  const { gold10g } = useMetalPrices()
 
   const set = (name, value) => {
     setForm(f => {
@@ -216,6 +219,7 @@ export default function SalesLedger() {
       product_amount: parseFloat(form.product_amount) || null,
       revenue: parseFloat(form.revenue) || null,
       fine_metal: parseFloat(form.fine_metal) || null,
+      gold_rate_at_sale: parseFloat(form.gold_rate_at_sale) || null,
     }
     if (form.id) await supabase.from('sales').update(payload).eq('id', form.id)
     else await supabase.from('sales').insert(payload)
@@ -261,7 +265,7 @@ export default function SalesLedger() {
           <h1 className="text-2xl font-bold text-gray-800">Sales Ledger</h1>
           <p className="text-gray-500 text-sm">Total: ₹{Number(totalSales).toLocaleString('en-IN')} · Pending: ₹{Number(totalPending).toLocaleString('en-IN')}</p>
         </div>
-        <button onClick={() => { setForm(EMPTY); setCustSearch(''); setShowForm(true) }}
+        <button onClick={() => { setForm({ ...EMPTY, gold_rate_at_sale: gold10g || '', metal_rate_on_day: gold10g || '' }); setCustSearch(''); setShowForm(true) }}
           className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold px-4 py-2 rounded-lg">
           <Plus size={16} /> New Sale
         </button>
@@ -372,6 +376,12 @@ export default function SalesLedger() {
               <FormField label="Product Stamp" name="product_stamp" value={form.product_stamp} onChange={set} />
 
               <div className="col-span-2 border-t pt-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Pricing</div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Gold Rate on Sale Day (₹/10g) <span className="text-xs font-normal text-amber-600">auto</span></label>
+                <input type="number" value={form.gold_rate_at_sale || ''} onChange={e => set('gold_rate_at_sale', e.target.value)}
+                  className="w-full border border-amber-300 rounded-lg px-3 py-2 text-sm bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+              </div>
+              <div />
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">GST %</label>
                 <input type="number" value={form.gst_pct || ''} onChange={e => set('gst_pct', e.target.value)}

@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
 
-const API_KEY = 'goldapi-eb1c9d785fdecfd1d3ebed7719f1e3a0-io'
 const CACHE_KEY = 'srk_metal_prices'
 const REFRESH_KEY = 'srk_refresh_count'
 const TODAY = () => new Date().toISOString().split('T')[0]
@@ -10,7 +9,6 @@ function loadCache() {
     const raw = localStorage.getItem(CACHE_KEY)
     if (!raw) return null
     const data = JSON.parse(raw)
-    // valid only if cached today
     if (data.date === TODAY()) return data
     return null
   } catch { return null }
@@ -36,18 +34,22 @@ function incrementRefreshCount() {
   return count
 }
 
-async function fetchFromAPI() {
-  const [goldRes, silverRes] = await Promise.all([
-    fetch('https://www.goldapi.io/api/XAU/INR', { headers: { 'x-access-token': API_KEY } }),
-    fetch('https://www.goldapi.io/api/XAG/INR', { headers: { 'x-access-token': API_KEY } }),
-  ])
-  const gold = await goldRes.json()
-  const silver = await silverRes.json()
+async function fetchMCXRate(ticker) {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`Failed: ${ticker}`)
+  const data = await res.json()
+  return data.chart.result[0].meta.regularMarketPrice
+}
 
-  // price is per troy oz in INR
-  const gold10g = Math.round((gold.price / 31.1035) * 10)
-  const silverKg = Math.round((silver.price / 31.1035) * 1000)
-  return { gold10g, silverKg }
+async function fetchFromAPI() {
+  // MCX Gold is quoted in INR per 10g; MCX Silver in INR per kg
+  // These are Indian market rates including all duties — matches local jewellery market
+  const [gold10g, silverKg] = await Promise.all([
+    fetchMCXRate('GOLD.MCX'),
+    fetchMCXRate('SILVER.MCX'),
+  ])
+  return { gold10g: Math.round(gold10g), silverKg: Math.round(silverKg) }
 }
 
 export function useMetalPrices() {
@@ -61,7 +63,6 @@ export function useMetalPrices() {
   })
   const [showWarning, setShowWarning] = useState(false)
 
-  // Fetch on mount only if no cache for today
   useEffect(() => {
     if (cached) return
     fetchFromAPI()
@@ -77,10 +78,7 @@ export function useMetalPrices() {
 
   const refresh = useCallback(async () => {
     const count = getRefreshCount()
-    if (count >= 2) {
-      setShowWarning(true)
-      return
-    }
+    if (count >= 2) { setShowWarning(true); return }
     setPrices(p => ({ ...p, loading: true, error: null }))
     try {
       const { gold10g, silverKg } = await fetchFromAPI()
