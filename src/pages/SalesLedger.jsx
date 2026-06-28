@@ -221,8 +221,21 @@ export default function SalesLedger() {
       fine_metal: parseFloat(form.fine_metal) || null,
       gold_rate_at_sale: parseFloat(form.gold_rate_at_sale) || null,
     }
-    if (form.id) await supabase.from('sales').update(payload).eq('id', form.id)
-    else await supabase.from('sales').insert(payload)
+    let error
+    if (form.id) {
+      const result = await supabase.from('sales').update(payload).eq('id', form.id)
+      error = result.error
+    } else {
+      const result = await supabase.from('sales').insert(payload)
+      error = result.error
+    }
+
+    if (error) {
+      alert('Error saving sale: ' + error.message)
+      setSaving(false)
+      return
+    }
+
     await load()
     setShowForm(false)
     setForm(EMPTY)
