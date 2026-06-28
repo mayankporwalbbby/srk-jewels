@@ -15,7 +15,8 @@ const EMPTY = {
   final_price_after_discount: '', hsn_code: '', bought_from: 'Self',
   amount_paid: '', pending_amount: '', product_amount: '', revenue: '',
   return_commitment: '', payment_commitment: '', executive: 'Mayank', remark: '',
-  gold_rate_at_sale: ''
+  gold_rate_at_sale: '',
+  image_url: '', image_url_2: '', image_url_3: '', image_url_4: '', image_url_5: ''
 }
 
 const EXECUTIVES = ['Mayank', 'Divyanshu']
@@ -135,25 +136,22 @@ function SaleRow({ sale, onEdit, onPrint }) {
         {open && (
           <div className="px-4 pb-4 border-t border-gray-100 pt-3 space-y-4">
             {/* Images */}
-            {(sale.image_front || sale.image_back) && (
-              <div>
-                <div className="text-xs font-medium text-gray-500 mb-1">Photos · Saved {sale.date}</div>
-                <div className="flex gap-2">
-                  {sale.image_front && (
-                    <div className="relative cursor-pointer" onClick={() => setLightbox(sale.image_front)}>
-                      <img src={sale.image_front} className="h-20 w-20 object-cover rounded-lg border border-gray-200" alt="Front" />
-                      <span className="absolute bottom-0 left-0 right-0 text-center text-white text-xs bg-black/40 rounded-b-lg py-0.5">Front</span>
-                    </div>
-                  )}
-                  {sale.image_back && (
-                    <div className="relative cursor-pointer" onClick={() => setLightbox(sale.image_back)}>
-                      <img src={sale.image_back} className="h-20 w-20 object-cover rounded-lg border border-gray-200" alt="Back" />
-                      <span className="absolute bottom-0 left-0 right-0 text-center text-white text-xs bg-black/40 rounded-b-lg py-0.5">Back</span>
-                    </div>
-                  )}
+            {(() => {
+              const imgs = [sale.image_url || sale.image_front, sale.image_url_2 || sale.image_back, sale.image_url_3, sale.image_url_4, sale.image_url_5].filter(Boolean)
+              return imgs.length > 0 ? (
+                <div>
+                  <div className="text-xs font-medium text-gray-500 mb-1">Photos · {sale.date}</div>
+                  <div className="flex gap-2 flex-wrap">
+                    {imgs.map((url, i) => (
+                      <div key={i} className="relative cursor-pointer" onClick={() => setLightbox(url)}>
+                        <img src={url} className="h-20 w-20 object-cover rounded-lg border border-gray-200" alt={`Photo ${i+1}`} />
+                        <span className="absolute bottom-0 left-0 right-0 text-center text-white text-xs bg-black/40 rounded-b-lg py-0.5">Photo {i+1}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              ) : null
+            })()}
 
             {/* Sale details */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
@@ -247,8 +245,7 @@ export default function SalesLedger() {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
-  const [imgFront, setImgFront] = useState(null)
-  const [imgBack, setImgBack] = useState(null)
+  const [imgFiles, setImgFiles] = useState([null, null, null, null, null])
   const [search, setSearch] = useState('')
   const [period, setPeriod] = useState('all')
   const [printSale, setPrintSale] = useState(null)
@@ -315,11 +312,14 @@ export default function SalesLedger() {
   const handleSave = async (e) => {
     e.preventDefault()
     setSaving(true)
-    const [frontUrl, backUrl] = await Promise.all([uploadImg(imgFront, 'sales/front'), uploadImg(imgBack, 'sales/back')])
+    const urls = await Promise.all(imgFiles.map((f, i) => f ? uploadImg(f, `sales/${i+1}`) : Promise.resolve(null)))
     const payload = {
       ...form,
-      image_front: frontUrl || form.image_front,
-      image_back: backUrl || form.image_back,
+      image_url: urls[0] || form.image_url || form.image_front || null,
+      image_url_2: urls[1] || form.image_url_2 || form.image_back || null,
+      image_url_3: urls[2] || form.image_url_3 || null,
+      image_url_4: urls[3] || form.image_url_4 || null,
+      image_url_5: urls[4] || form.image_url_5 || null,
       product_quality_pct: parseFloat(form.product_quality_pct) || null,
       product_weight: parseFloat(form.product_weight) || null,
       metal_rate_on_day: parseFloat(form.metal_rate_on_day) || null,
@@ -338,6 +338,8 @@ export default function SalesLedger() {
       gold_rate_at_sale: parseFloat(form.gold_rate_at_sale) || null,
     }
     delete payload.product_quality_pct
+    delete payload.image_front
+    delete payload.image_back
 
     let error
     if (form.id) {
@@ -357,6 +359,7 @@ export default function SalesLedger() {
     await load()
     setShowForm(false)
     setForm(EMPTY)
+    setImgFiles([null, null, null, null, null])
     setSaving(false)
   }
 
@@ -545,16 +548,24 @@ export default function SalesLedger() {
               <FormField label="Revenue/Profit (₹)" name="revenue" type="number" value={form.revenue} onChange={set} />
               <FormField label="Remarks" name="remark" value={form.remark} onChange={set} col2 rows={2} />
 
-              <div className="col-span-2 grid grid-cols-2 gap-3">
-                {[['Front Image', imgFront, setImgFront], ['Back Image', imgBack, setImgBack]].map(([lbl, file, setter]) => (
-                  <div key={lbl}>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">{lbl}</label>
-                    <label className="flex items-center gap-2 border-2 border-dashed border-amber-300 rounded-lg px-3 py-2 cursor-pointer hover:bg-amber-50 text-xs text-amber-600">
-                      <Upload size={14} /> {file ? file.name : 'Upload'}
-                      <input type="file" accept="image/*" className="hidden" onChange={e => setter(e.target.files[0])} />
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-gray-600 mb-2">Product Photos (up to 5)</label>
+                <div className="grid grid-cols-5 gap-2">
+                  {[0,1,2,3,4].map(i => (
+                    <label key={i} className="flex flex-col items-center justify-center border-2 border-dashed border-amber-300 rounded-lg p-2 cursor-pointer hover:bg-amber-50 text-center">
+                      {imgFiles[i] ? (
+                        <img src={URL.createObjectURL(imgFiles[i])} className="h-12 w-full object-cover rounded" alt="" />
+                      ) : form[i === 0 ? 'image_url' : `image_url_${i+1}`] || (i === 0 ? form.image_front : i === 1 ? form.image_back : null) ? (
+                        <img src={form[i === 0 ? 'image_url' : `image_url_${i+1}`] || (i === 0 ? form.image_front : form.image_back)} className="h-12 w-full object-cover rounded" alt="" />
+                      ) : (
+                        <><Upload size={14} className="text-amber-400 mb-1" /><span className="text-xs text-amber-500">Photo {i+1}</span></>
+                      )}
+                      <input type="file" accept="image/*" className="hidden" onChange={e => {
+                        const files = [...imgFiles]; files[i] = e.target.files[0]; setImgFiles(files)
+                      }} />
                     </label>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
 
               <div className="col-span-2 flex gap-3 justify-end mt-2">

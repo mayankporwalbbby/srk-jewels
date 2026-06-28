@@ -18,6 +18,13 @@ alter table loan_entries add column if not exists monthly_interest numeric;
 alter table loan_entries add column if not exists gold_rate_at_lending numeric;
 alter table sales add column if not exists gold_rate_at_sale numeric;
 
+-- Sales: 5 image slots (replacing image_front/image_back)
+alter table sales add column if not exists image_url text;
+alter table sales add column if not exists image_url_2 text;
+alter table sales add column if not exists image_url_3 text;
+alter table sales add column if not exists image_url_4 text;
+alter table sales add column if not exists image_url_5 text;
+
 -- Payment history tables (for tracking partial payments per sale/loan)
 create table if not exists sale_payments (
   id uuid default gen_random_uuid() primary key,
