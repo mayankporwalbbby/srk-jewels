@@ -27,16 +27,46 @@ function monthsDiff(from) {
 
 function LoanRow({ loan, onEdit }) {
   const [open, setOpen] = useState(false)
+  const [payments, setPayments] = useState([])
+  const [newAmt, setNewAmt] = useState('')
+  const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0])
+  const [newNote, setNewNote] = useState('')
+  const [addingPay, setAddingPay] = useState(false)
   const fmt = n => n != null && n !== '' ? '₹' + Number(n).toLocaleString('en-IN') : '—'
   const isActive = !loan.loan_cleared_date
   const months = monthsDiff(loan.date_lended)
   const monthlyInterest = loan.loan_amount && loan.interest_rate ? (loan.loan_amount * loan.interest_rate) / 100 : 0
   const totalInterest = monthlyInterest * months
-  const totalDue = (loan.loan_amount || 0) + totalInterest - (loan.amount_submitted || 0)
+
+  const loadPayments = async () => {
+    const { data } = await supabase.from('loan_payments').select('*').eq('loan_id', loan.id).order('date')
+    setPayments(data || [])
+  }
+
+  const handleOpen = () => {
+    if (!open) loadPayments()
+    setOpen(o => !o)
+  }
+
+  const totalSubmitted = payments.reduce((s, p) => s + (p.amount || 0), 0) + (loan.amount_submitted || 0)
+  const totalDue = (loan.loan_amount || 0) + totalInterest - totalSubmitted
+
+  const addPayment = async () => {
+    if (!newAmt) return
+    await supabase.from('loan_payments').insert({ loan_id: loan.id, amount: parseFloat(newAmt), date: newDate, note: newNote || null })
+    setNewAmt(''); setNewNote(''); setAddingPay(false)
+    loadPayments()
+  }
+
+  const deletePayment = async (id) => {
+    if (!confirm('Delete this payment entry?')) return
+    await supabase.from('loan_payments').delete().eq('id', id)
+    loadPayments()
+  }
 
   return (
     <div className={`border rounded-xl mb-2 overflow-hidden ${isActive ? 'border-blue-200 bg-white' : 'border-gray-100 bg-gray-50'}`}>
-      <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-blue-50/50" onClick={() => setOpen(o => !o)}>
+      <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-blue-50/50" onClick={handleOpen}>
         <div className="flex items-center gap-3 flex-wrap">
           <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isActive ? 'bg-green-400' : 'bg-gray-300'}`} />
           <div>
@@ -56,9 +86,10 @@ function LoanRow({ loan, onEdit }) {
           {open ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
         </div>
       </div>
+
       {open && (
-        <div className="px-4 pb-4 border-t border-gray-100 pt-3">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-3">
+        <div className="px-4 pb-4 border-t border-gray-100 pt-3 space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
             <Info label="Product" value={`${loan.product_lended} (${loan.product_metal})`} />
             <Info label="Weight" value={loan.product_weight_gm ? `${loan.product_weight_gm} gm` : '—'} />
             <Info label="Date Lended" value={loan.date_lended || '—'} />
@@ -68,18 +99,65 @@ function LoanRow({ loan, onEdit }) {
             <Info label="Months Running" value={`${months} months`} />
             <Info label="Total Interest" value={fmt(totalInterest)} />
             <Info label="Gold Rate at Lending" value={loan.gold_rate_at_lending ? `₹${Number(loan.gold_rate_at_lending).toLocaleString('en-IN')}/10g` : '—'} />
-            <Info label="Amount Submitted" value={fmt(loan.amount_submitted)} />
-            <Info label="Total Due" value={fmt(totalDue)} />
             <Info label="Status" value={isActive ? 'Active' : `Cleared: ${loan.loan_cleared_date}`} />
             {loan.loan_type === 'Partner' && <Info label="Partner" value={loan.partner} />}
             {loan.contact && (
               <div className="col-span-2 flex gap-3">
                 <a href={`tel:${loan.contact}`} className="flex items-center gap-1 text-xs text-blue-500 hover:underline"><Phone size={12} /> Call</a>
-                <a href={`https://wa.me/91${loan.contact}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-green-500 hover:underline"><MessageCircle size={12} /> WhatsApp</a>
+                <a href={`https://wa.me/91${loan.contact?.replace(/\D/g,'')}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-green-500 hover:underline"><MessageCircle size={12} /> WhatsApp</a>
               </div>
             )}
             {loan.remark && <div className="col-span-2 md:col-span-4 text-xs text-gray-400 italic">{loan.remark}</div>}
           </div>
+
+          {/* Payment / Submission Ledger */}
+          <div className="bg-gray-50 rounded-xl p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Repayment Ledger</div>
+              <button onClick={() => setAddingPay(p => !p)} className="text-xs text-blue-600 font-medium hover:underline">+ Add Repayment</button>
+            </div>
+
+            {loan.amount_submitted > 0 && (
+              <div className="flex justify-between items-center py-1.5 border-b border-gray-200 text-sm">
+                <div>
+                  <span className="font-medium text-gray-700">{fmt(loan.amount_submitted)}</span>
+                  <span className="text-xs text-gray-400 ml-2">{loan.date_submission || loan.date_lended} · Initial submission</span>
+                </div>
+              </div>
+            )}
+
+            {payments.map(p => (
+              <div key={p.id} className="flex justify-between items-center py-1.5 border-b border-gray-200 text-sm">
+                <div>
+                  <span className="font-medium text-gray-700">{fmt(p.amount)}</span>
+                  <span className="text-xs text-gray-400 ml-2">{p.date}{p.note ? ` · ${p.note}` : ''}</span>
+                </div>
+                <button onClick={() => deletePayment(p.id)} className="text-xs text-red-400 hover:text-red-600">✕</button>
+              </div>
+            ))}
+
+            <div className="flex justify-between pt-2 text-sm font-semibold mt-1">
+              <span className="text-gray-600">Total Submitted</span>
+              <span className="text-green-600">{fmt(totalSubmitted)}</span>
+            </div>
+            <div className="flex justify-between text-sm font-semibold">
+              <span className="text-gray-600">Total Due (with interest)</span>
+              <span className={totalDue > 0 ? 'text-red-500' : 'text-green-500'}>{totalDue > 0 ? fmt(totalDue) : 'Cleared ✓'}</span>
+            </div>
+
+            {addingPay && (
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <input type="number" placeholder="Amount ₹" value={newAmt} onChange={e => setNewAmt(e.target.value)}
+                  className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)}
+                  className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                <input placeholder="Note (optional)" value={newNote} onChange={e => setNewNote(e.target.value)}
+                  className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                <button onClick={addPayment} className="col-span-3 bg-blue-600 text-white text-sm py-1.5 rounded-lg font-medium hover:bg-blue-700">Save Repayment</button>
+              </div>
+            )}
+          </div>
+
           <button onClick={() => onEdit(loan)} className="text-xs text-blue-500 hover:underline">Edit</button>
         </div>
       )}

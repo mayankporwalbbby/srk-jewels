@@ -71,52 +71,168 @@ function PrintInvoice({ sale, onClose }) {
 
 function SaleRow({ sale, onEdit, onPrint }) {
   const [open, setOpen] = useState(false)
+  const [payments, setPayments] = useState([])
+  const [newAmt, setNewAmt] = useState('')
+  const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0])
+  const [newNote, setNewNote] = useState('')
+  const [addingPay, setAddingPay] = useState(false)
+  const [lightbox, setLightbox] = useState(null)
   const fmt = n => n != null ? '₹' + Number(n).toLocaleString('en-IN') : '—'
+
+  const loadPayments = async () => {
+    const { data } = await supabase.from('sale_payments').select('*').eq('sale_id', sale.id).order('date')
+    setPayments(data || [])
+  }
+
+  const handleOpen = () => {
+    if (!open) loadPayments()
+    setOpen(o => !o)
+  }
+
+  const totalPaid = payments.reduce((s, p) => s + (p.amount || 0), 0) + (sale.amount_paid || 0)
+  const totalPending = (sale.final_price_with_gst || 0) - totalPaid
+
+  const addPayment = async () => {
+    if (!newAmt) return
+    await supabase.from('sale_payments').insert({ sale_id: sale.id, amount: parseFloat(newAmt), date: newDate, note: newNote || null })
+    setNewAmt(''); setNewNote(''); setAddingPay(false)
+    loadPayments()
+  }
+
+  const deletePayment = async (id) => {
+    if (!confirm('Delete this payment entry?')) return
+    await supabase.from('sale_payments').delete().eq('id', id)
+    loadPayments()
+  }
+
   return (
-    <div className="border border-gray-100 rounded-xl bg-white mb-2 overflow-hidden">
-      <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-amber-50" onClick={() => setOpen(o => !o)}>
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="font-mono text-xs text-amber-600 font-bold">{sale.invoice_id}</span>
-          <span className="text-sm text-gray-700 font-medium">{sale.customer_name}</span>
-          <span className="text-xs text-gray-400 hidden sm:block">{sale.date}</span>
-          <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full text-gray-600">{sale.product_bought}</span>
-          {sale.executive && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{sale.executive}</span>}
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="text-right">
-            <div className="text-sm font-semibold">{fmt(sale.final_price_with_gst)}</div>
-            {sale.pending_amount > 0 && <div className="text-xs text-red-500">Pending: {fmt(sale.pending_amount)}</div>}
-          </div>
-          {open ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
-        </div>
-      </div>
-      {open && (
-        <div className="px-4 pb-4 border-t border-gray-100 pt-3">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-3">
-            <Info label="Metal" value={`${sale.product_metal} · ${sale.product_weight}g`} />
-            <Info label="Quality" value={sale.product_quality_pct ? `${sale.product_quality_pct}%` : '—'} />
-            <Info label="Rate/Gram" value={fmt(sale.metal_rate_per_gram)} />
-            <Info label="Without GST" value={fmt(sale.amount_without_gst)} />
-            <Info label="Discount" value={sale.discount > 0 ? fmt(sale.discount) : 'None'} />
-            <Info label="GST" value={fmt(sale.gst_amount)} />
-            <Info label="Paid" value={fmt(sale.amount_paid)} />
-            <Info label="Pending" value={sale.pending_amount > 0 ? fmt(sale.pending_amount) : 'Cleared'} />
-            {sale.payment_commitment && <Info label="Payment Commitment" value={sale.payment_commitment} />}
-            {sale.return_commitment && <Info label="Return Commitment" value={sale.return_commitment} />}
-            {sale.contact && (
-              <div className="col-span-2 flex gap-3">
-                <a href={`tel:${sale.contact}`} className="flex items-center gap-1 text-xs text-blue-500 hover:underline"><Phone size={12} /> Call</a>
-                <a href={`https://wa.me/91${sale.contact}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-green-500 hover:underline"><MessageCircle size={12} /> WhatsApp</a>
-              </div>
-            )}
-          </div>
-          <div className="flex gap-3">
-            <button onClick={() => onEdit(sale)} className="text-xs text-blue-500 hover:underline">Edit</button>
-            <button onClick={() => onPrint(sale)} className="text-xs text-gray-500 hover:underline flex items-center gap-1"><Printer size={10} /> Print Invoice</button>
-          </div>
+    <>
+      {lightbox && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setLightbox(null)}>
+          <img src={lightbox} className="max-h-full max-w-full rounded-xl" alt="Preview" />
         </div>
       )}
-    </div>
+      <div className="border border-gray-100 rounded-xl bg-white mb-2 overflow-hidden">
+        <div className="flex items-center justify-between p-4 cursor-pointer hover:bg-amber-50" onClick={handleOpen}>
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="font-mono text-xs text-amber-600 font-bold">{sale.invoice_id}</span>
+            <span className="text-sm text-gray-700 font-medium">{sale.customer_name}</span>
+            <span className="text-xs text-gray-400 hidden sm:block">{sale.date}</span>
+            <span className="text-xs bg-gray-100 px-2 py-0.5 rounded-full text-gray-600">{sale.product_bought}</span>
+            {sale.executive && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{sale.executive}</span>}
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <div className="text-sm font-semibold">{fmt(sale.final_price_with_gst)}</div>
+              {totalPending > 0
+                ? <div className="text-xs text-red-500">Pending: {fmt(totalPending)}</div>
+                : <div className="text-xs text-green-500">Cleared</div>}
+            </div>
+            {open ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+          </div>
+        </div>
+
+        {open && (
+          <div className="px-4 pb-4 border-t border-gray-100 pt-3 space-y-4">
+            {/* Images */}
+            {(sale.image_front || sale.image_back) && (
+              <div>
+                <div className="text-xs font-medium text-gray-500 mb-1">Photos · Saved {sale.date}</div>
+                <div className="flex gap-2">
+                  {sale.image_front && (
+                    <div className="relative cursor-pointer" onClick={() => setLightbox(sale.image_front)}>
+                      <img src={sale.image_front} className="h-20 w-20 object-cover rounded-lg border border-gray-200" alt="Front" />
+                      <span className="absolute bottom-0 left-0 right-0 text-center text-white text-xs bg-black/40 rounded-b-lg py-0.5">Front</span>
+                    </div>
+                  )}
+                  {sale.image_back && (
+                    <div className="relative cursor-pointer" onClick={() => setLightbox(sale.image_back)}>
+                      <img src={sale.image_back} className="h-20 w-20 object-cover rounded-lg border border-gray-200" alt="Back" />
+                      <span className="absolute bottom-0 left-0 right-0 text-center text-white text-xs bg-black/40 rounded-b-lg py-0.5">Back</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Sale details */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+              <Info label="Metal" value={`${sale.product_metal} · ${sale.product_weight}g`} />
+              <Info label="Quality" value={sale.product_quality_pct ? `${sale.product_quality_pct}%` : '—'} />
+              <Info label="Rate/Gram" value={fmt(sale.metal_rate_per_gram)} />
+              <Info label="Without GST" value={fmt(sale.amount_without_gst)} />
+              <Info label="Discount" value={sale.discount > 0 ? fmt(sale.discount) : 'None'} />
+              <Info label="GST" value={fmt(sale.gst_amount)} />
+              {sale.payment_commitment && <Info label="Payment Commitment" value={sale.payment_commitment} />}
+              {sale.return_commitment && <Info label="Return Commitment" value={sale.return_commitment} />}
+              {sale.contact && (
+                <div className="col-span-2 flex gap-3 mt-1">
+                  <a href={`tel:${sale.contact}`} className="flex items-center gap-1 text-xs text-blue-500 hover:underline"><Phone size={12} /> Call</a>
+                  <a href={`https://wa.me/91${sale.contact?.replace(/\D/g,'')}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-green-500 hover:underline"><MessageCircle size={12} /> WhatsApp</a>
+                </div>
+              )}
+            </div>
+
+            {/* Payment ledger */}
+            <div className="bg-gray-50 rounded-xl p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Payment Ledger</div>
+                <button onClick={() => setAddingPay(p => !p)} className="text-xs text-amber-600 font-medium hover:underline">+ Add Payment</button>
+              </div>
+
+              {/* Original payment row */}
+              {sale.amount_paid > 0 && (
+                <div className="flex justify-between items-center py-1.5 border-b border-gray-200 text-sm">
+                  <div>
+                    <span className="font-medium text-gray-700">{fmt(sale.amount_paid)}</span>
+                    <span className="text-xs text-gray-400 ml-2">{sale.date} · Initial payment</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Additional payments */}
+              {payments.map(p => (
+                <div key={p.id} className="flex justify-between items-center py-1.5 border-b border-gray-200 text-sm">
+                  <div>
+                    <span className="font-medium text-gray-700">{fmt(p.amount)}</span>
+                    <span className="text-xs text-gray-400 ml-2">{p.date}{p.note ? ` · ${p.note}` : ''}</span>
+                  </div>
+                  <button onClick={() => deletePayment(p.id)} className="text-xs text-red-400 hover:text-red-600">✕</button>
+                </div>
+              ))}
+
+              {/* Totals */}
+              <div className="flex justify-between pt-2 text-sm font-semibold mt-1">
+                <span className="text-gray-600">Total Paid</span>
+                <span className="text-green-600">{fmt(totalPaid)}</span>
+              </div>
+              <div className="flex justify-between text-sm font-semibold">
+                <span className="text-gray-600">Pending</span>
+                <span className={totalPending > 0 ? 'text-red-500' : 'text-green-500'}>{totalPending > 0 ? fmt(totalPending) : 'Cleared ✓'}</span>
+              </div>
+
+              {/* Add payment form */}
+              {addingPay && (
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  <input type="number" placeholder="Amount ₹" value={newAmt} onChange={e => setNewAmt(e.target.value)}
+                    className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                  <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)}
+                    className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                  <input placeholder="Note (optional)" value={newNote} onChange={e => setNewNote(e.target.value)}
+                    className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                  <button onClick={addPayment} className="col-span-3 bg-amber-600 text-white text-sm py-1.5 rounded-lg font-medium hover:bg-amber-700">Save Payment</button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={() => onEdit(sale)} className="text-xs text-blue-500 hover:underline">Edit</button>
+              <button onClick={() => onPrint(sale)} className="text-xs text-gray-500 hover:underline flex items-center gap-1"><Printer size={10} /> Print Invoice</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
   )
 }
 
